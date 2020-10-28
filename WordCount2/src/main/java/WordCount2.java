@@ -19,6 +19,7 @@ import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.input.SequenceFileInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.mapreduce.Counter;
+import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
 import org.apache.hadoop.util.GenericOptionsParser;
 import org.apache.hadoop.util.StringUtils;
 import org.apache.hadoop.mapreduce.lib.output.SequenceFileOutputFormat;
@@ -84,6 +85,7 @@ public class WordCount2 {
                     }
                 }
 
+
                 if (s.length() >= 3 && !founded) {
                     word.set(s);
                     context.write(word, one);
@@ -111,18 +113,21 @@ public class WordCount2 {
         }
     }
 
-    public static class SortReducer extends Reducer<Text, IntWritable, Text, NullWritable> {
+    public static class SortReducer extends Reducer<IntWritable, Text, IntWritable,Text> {
         private Text result = new Text();
+        private IntWritable ct = new IntWritable();
         int count = 0;
-        protected void reduce(IntWritable key, Iterable<Text> values, Reducer<IntWritable, Text, Text, NullWritable>.Context context) throws IOException, InterruptedException {
-            for (Text val :values) {
+        @Override
+        public void reduce(IntWritable key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
+            for (Text val : values) {
                 if (count >= 100) {
                     break;
                 }
                 count ++;
-                result.set(val.toString());
-                String s1 = "Rank"+ count + ": " + result + ", times: " + "key";
-                context.write(new Text(s1), NullWritable.get());
+                ct.set(count);
+                String s = val.toString() + " times: " + key.toString();
+                result.set(s);
+                context.write(ct,result);
 
             }
         }
@@ -140,6 +145,7 @@ public class WordCount2 {
     }
 
     public static void main(String[] args) throws Exception {
+
         Configuration conf = new Configuration();
         GenericOptionsParser optionsParser = new GenericOptionsParser(conf, args);
         String[] remainingArgs = optionsParser.getRemainingArgs();
@@ -177,13 +183,14 @@ public class WordCount2 {
         Job sortjob = new Job(conf, "sort");
         FileInputFormat.addInputPath(sortjob, tempDir);
         sortjob.setInputFormatClass(SequenceFileInputFormat.class);
+        sortjob.setOutputFormatClass(TextOutputFormat.class);
         sortjob.setMapperClass(InverseMapper.class);
         sortjob.setNumReduceTasks(1);
-        sortjob.setReducerClass(SortReducer.class);
         FileOutputFormat.setOutputPath(sortjob,
                 new Path(otherArgs.get(1)));
         sortjob.setOutputKeyClass(IntWritable.class);
         sortjob.setOutputValueClass(Text.class);
+        sortjob.setReducerClass(SortReducer.class);
         sortjob.setSortComparatorClass(IntWritableDecreasingComparator.class);
 
         sortjob.waitForCompletion(true);
